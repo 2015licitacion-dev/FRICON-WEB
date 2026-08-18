@@ -1,0 +1,12 @@
+# Material de trabajo: no se publica en la web.
+#
+# ORIGINALES guarda los vídeos e imágenes en bruto (los que sí se usan ya están
+# recortados en assets/), la carpeta BARISMO, el vídeo del laboratorio y las
+# fichas en borrador. Son ~35 MB que nadie descarga desde la web, y el borrador
+# no debería quedar público: el repositorio se ve desde internet.
+ORIGINALES/
+
+# Basura del sistema
+Thumbs.db
+desktop.ini
+.DS_Store
