@@ -6,7 +6,7 @@
   'use strict';
 
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var WA = '573026234401';
+  var WA = '573165274199';
 
   /* ------------------------------------------- Logo en video: cada 15 s */
   var marcaVideo = document.querySelector('.marca-video');

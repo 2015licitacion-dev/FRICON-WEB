@@ -26,7 +26,7 @@
   var DATOS = window.FRICON_CATALOGO;
   if (!DATOS || !DATOS.equipos || !DATOS.equipos.length) return;
 
-  var WA = '573026234401';
+  var WA = '573165274199';
   var MAX = 5;                 // cuántos equipos mostrar por respuesta
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -262,16 +262,19 @@
 
   /* ====================================================== 5. PANEL */
 
-  var CEREBRO = 'assets/ia-fricon.png';
+  /* Recorte cuadrado de «CEREBRO FRICON.jpg» (carpeta assets), preparado para
+     web: 512 px y 40 KB en vez de los 2 MB del original, y encuadrado para que
+     el logo entre completo dentro del círculo del botón flotante. */
+  var CEREBRO = 'assets/cerebro-fricon.jpg';
 
   var raiz = document.createElement('div');
   raiz.className = 'ia-raiz';
   raiz.innerHTML = ''
     + '<button class="ia-boton" type="button" aria-haspopup="dialog" aria-label="Abrir el asistente del catálogo">'
-    +   '<img src="' + CEREBRO + '" alt="" width="54" height="54">'
+    +   '<img src="' + CEREBRO + '" alt="" width="80" height="80">'
     +   '<span class="ia-boton-pulso" aria-hidden="true"></span>'
     + '</button>'
-    + '<span class="ia-globo" aria-hidden="true">¿Busca un equipo? Pregúnteme</span>'
+    + '<span class="ia-globo" aria-hidden="true">Soy FRICON… ¡Pregúntame!</span>'
     + '<dialog class="ia-panel" closedby="any" aria-labelledby="ia-titulo">'
     +   '<div class="ia-cab">'
     +     '<img class="ia-cab-icono" src="' + CEREBRO + '" alt="" width="40" height="40">'
@@ -301,6 +304,49 @@
   var hilo   = raiz.querySelector('.ia-hilo');
   var form   = raiz.querySelector('.ia-pie');
   var campo  = raiz.querySelector('#ia-entrada');
+
+  /* -------------------------------------------- anclado al hero / flotante
+     Si la página trae una franja de aterrizaje (#ia-anclaje, hoy solo la
+     principal), el botón y su globo empiezan dentro de ella, a la vista, y
+     bajan a la esquina en cuanto esa franja sale de pantalla. Se mueven los
+     nodos de sitio en vez de duplicarlos: así hay un solo botón, con sus
+     eventos y su estado intactos. El panel de conversación no se mueve
+     —vive en el <body> porque es un diálogo modal—. */
+
+  var anclaje = document.getElementById('ia-anclaje');
+  var anclado = false;
+
+  function anclar() {
+    if (anclado || !anclaje) return;
+    anclado = true;
+    boton.removeAttribute('data-recien-soltado');
+    anclaje.appendChild(globo);
+    anclaje.appendChild(boton);
+  }
+
+  function soltar() {
+    if (!anclado) return;
+    anclado = false;
+    raiz.insertBefore(globo, panel);
+    raiz.insertBefore(boton, globo);
+    // El gesto de llegada solo cuando ya hubo interacción de scroll real.
+    boton.setAttribute('data-recien-soltado', 'true');
+    setTimeout(function () { boton.removeAttribute('data-recien-soltado'); }, 400);
+  }
+
+  if (anclaje) {
+    anclar();
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(function (entradas) {
+        entradas.forEach(function (e) { e.isIntersecting ? anclar() : soltar(); });
+      }, { rootMargin: '-10px 0px 0px 0px' }).observe(anclaje);
+    } else {
+      // Navegador antiguo: al primer scroll se suelta y se queda flotando.
+      window.addEventListener('scroll', function suelta() {
+        if (window.scrollY > 220) { soltar(); window.removeEventListener('scroll', suelta); }
+      }, { passive: true });
+    }
+  }
 
   /* ---------------------------------------------------- pintar mensajes */
 
@@ -394,8 +440,13 @@
 
   var estrenado = false;
 
+  /* «usado» = la persona ya abrió el asistente en esta visita. A partir de ahí
+     el globo se calla: insistir después de que ya lo probó, molesta. */
+  var usado = false;
+  try { usado = !!sessionStorage.getItem('ia-usado'); } catch (e) { /* sin sessionStorage */ }
+
   function abrir() {
-    globo.setAttribute('data-visible', 'false');
+    callarGlobo();
     if (!estrenado) {
       estrenado = true;
       pintarRespuesta({
@@ -426,17 +477,47 @@
     });
   }
 
-  /* El globo de invitación asoma una vez, pasado un rato, y solo si la persona
-     no ha abierto el asistente antes en esta visita. Insistir molesta. */
-  try {
-    if (!sessionStorage.getItem('ia-visto')) {
-      setTimeout(function () {
-        if (!panel.open) {
-          globo.setAttribute('data-visible', 'true');
-          sessionStorage.setItem('ia-visto', '1');
-          setTimeout(function () { globo.setAttribute('data-visible', 'false'); }, 7000);
-        }
-      }, 5000);
-    }
-  } catch (e) { /* sin sessionStorage, simplemente no se muestra */ }
+  /* ------------------------------------------- el globo de invitación
+     Asoma cada cierto tiempo mientras la persona no haya usado el asistente:
+     4 s de espera, 6 s a la vista, 20 s de descanso, y otra vez. Deja de
+     insistir en cuanto abre el panel —ya sabe que el botón está ahí— y se
+     queda quieto si la pestaña no está a la vista, para no gastar la
+     aparición hablándole a nadie. */
+  var ESPERA_1 = 4000,   // antes de la primera aparición
+      A_LA_VISTA = 6000, // cuánto se queda cada vez
+      DESCANSO = 20000;  // pausa entre una aparición y la siguiente
+
+  var globoTimer = null;
+
+  function mostrarGlobo() {
+    if (usado) return;
+    // Si el panel está abierto o la pestaña en segundo plano, se salta el turno
+    // pero el ciclo continúa: no se pierde para siempre.
+    if (panel.open || document.visibilityState !== 'visible') { programarGlobo(DESCANSO); return; }
+    globo.setAttribute('data-visible', 'true');
+    globoTimer = setTimeout(function () {
+      globo.setAttribute('data-visible', 'false');
+      programarGlobo(DESCANSO);
+    }, A_LA_VISTA);
+  }
+
+  function programarGlobo(ms) {
+    clearTimeout(globoTimer);
+    if (usado) return;
+    globoTimer = setTimeout(mostrarGlobo, ms);
+  }
+
+  function callarGlobo() {
+    usado = true;
+    clearTimeout(globoTimer);
+    globo.setAttribute('data-visible', 'false');
+    try { sessionStorage.setItem('ia-usado', '1'); } catch (e) { /* da igual */ }
+  }
+
+  if (!usado) programarGlobo(ESPERA_1);
+
+  // Si la persona vuelve a la pestaña, el ciclo sigue desde el descanso.
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && !usado && !panel.open) programarGlobo(DESCANSO);
+  });
 })();

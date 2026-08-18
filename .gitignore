@@ -6,6 +6,16 @@
 # no debería quedar público: el repositorio se ve desde internet.
 ORIGINALES/
 
+# El cerebro en bruto: 2 MB y 1950x2208 px. La web usa el recorte cuadrado
+# assets/cerebro-fricon.jpg, de 40 KB. El original se queda en el computador
+# por si hay que volver a encuadrarlo, pero no viaja al repositorio.
+assets/CEREBRO FRICON.jpg
+
+# Herramientas de desarrollo, por si alguna vez se instalan en esta carpeta.
+node_modules/
+package.json
+package-lock.json
+
 # Basura del sistema
 Thumbs.db
 desktop.ini
